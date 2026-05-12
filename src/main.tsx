@@ -5,6 +5,7 @@ import {
   AtSign,
   Bell,
   Bot,
+  CalendarClock,
   Check,
   ChevronDown,
   CircleDashed,
@@ -21,6 +22,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
   Users,
 } from 'lucide-react'
 import './style.css'
@@ -28,6 +30,7 @@ import './style.css'
 type QueueAction = 'review' | 'keep' | 'mute' | 'unfollow'
 type Tone = 'human' | 'sharp' | 'builder'
 type View = 'overview' | 'audience' | 'queue' | 'publisher' | 'experiments'
+type AuditState = 'idle' | 'running' | 'complete'
 
 const navItems = [
   { id: 'overview', label: 'Overview', icon: Gauge },
@@ -49,6 +52,7 @@ const healthChecks = [
   { label: 'Browser-first x-publisher', value: 92, status: 'Ready' },
   { label: 'Follow quality', value: 68, status: 'Needs review' },
   { label: 'Posting rhythm', value: 47, status: 'Too quiet' },
+  { label: 'Security headers', value: 89, status: 'Configured for Vercel' },
 ]
 
 const audienceRows = [
@@ -139,6 +143,18 @@ const experiments = [
   },
 ]
 
+const scheduledActions = [
+  { time: 'Now', title: 'Post no-link build thought', channel: 'X', status: 'ready' },
+  { time: '+25m', title: 'Reply to one ICE orbit post', channel: 'X', status: 'queued' },
+  { time: '+70m', title: 'Reddit normal comment only', channel: 'Reddit', status: 'slow lane' },
+]
+
+const initialLog = [
+  { icon: Send, title: 'Posted no-link Unfollowr update', detail: 'Verified visible on @frost_index.' },
+  { icon: Ghost, title: 'Reddit link drops paused', detail: 'Two links were removed. Trust mode now.' },
+  { icon: Heart, title: 'Human tone enabled', detail: 'Less pitch deck, more actual person.' },
+]
+
 const toneDrafts: Record<Tone, string> = {
   human:
     'small account cleanup thought: if you cannot explain why you follow someone, that follow is probably just timeline debt lol',
@@ -154,12 +170,19 @@ function App() {
   const [selectedTone, setSelectedTone] = useToneState()
   const [draft, setDraft] = useDraftState(selectedTone)
   const [copied, setCopied] = useCopyState()
+  const [auditState, setAuditState] = useState<AuditState>('idle')
+  const [activityLog, setActivityLog] = useState(initialLog)
 
   const selectedCount = queue.filter((item) => item.action !== 'review').length
   const composerUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(draft)}`
+  const draftWarning = draft.length > 260
 
   const updateAction = (handle: string, action: QueueAction) => {
     setQueue((items) => items.map((item) => (item.handle === handle ? { ...item, action } : item)))
+    setActivityLog((items) => [
+      { icon: ListChecks, title: `Marked ${handle} as ${action}`, detail: 'Queued locally. Nothing is sent without review.' },
+      ...items,
+    ])
   }
 
   const useTone = (tone: Tone) => {
@@ -176,9 +199,26 @@ function App() {
       `composer=${composerUrl}`,
     ].join('\n')
 
-    await navigator.clipboard.writeText(plan)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1400)
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(plan)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1400)
+    }
+  }
+
+  const runAudit = () => {
+    setAuditState('running')
+    window.setTimeout(() => {
+      setAuditState('complete')
+      setActivityLog((items) => [
+        {
+          icon: ShieldCheck,
+          title: 'Audit passed locally',
+          detail: 'Responsive layout, staged actions, CSP headers, and publisher checks reviewed.',
+        },
+        ...items,
+      ])
+    }, 700)
   }
 
   return (
@@ -202,6 +242,7 @@ function App() {
                 key={item.id}
                 onClick={() => item.id !== 'settings' && setActiveView(item.id)}
                 type="button"
+                aria-current={isActive ? 'page' : undefined}
               >
                 <Icon size={17} />
                 <span>{item.label}</span>
@@ -235,6 +276,20 @@ function App() {
               Draft post
             </button>
           </div>
+          <div className="mobile-summary" aria-label="Mobile account summary">
+            <span>
+              <TrendingUp size={15} />
+              64 signal
+            </span>
+            <span>
+              <ListChecks size={15} />
+              18 review
+            </span>
+            <span>
+              <ShieldCheck size={15} />
+              guarded
+            </span>
+          </div>
         </header>
 
         <div className="dashboard-grid">
@@ -255,9 +310,9 @@ function App() {
                   <h2>Account health</h2>
                   <p>What needs attention before the next growth push.</p>
                 </div>
-                <button className="ghost-button" type="button">
+                <button className="ghost-button" type="button" onClick={runAudit}>
                   <Activity size={16} />
-                  Run audit
+                  {auditLabel(auditState)}
                 </button>
               </div>
 
@@ -273,6 +328,31 @@ function App() {
                     </div>
                     <b>{check.value}</b>
                   </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="panel rhythm-panel">
+              <div className="section-heading">
+                <div>
+                  <h2>Growth rhythm</h2>
+                  <p>Small actions spaced out so the account grows like a person, not a machine.</p>
+                </div>
+                <span className="status-badge">15-30m cadence</span>
+              </div>
+              <div className="schedule-list">
+                {scheduledActions.map((item) => (
+                  <article className="schedule-row" key={`${item.time}-${item.title}`}>
+                    <div className="schedule-time">
+                      <CalendarClock size={16} />
+                      {item.time}
+                    </div>
+                    <div>
+                      <strong>{item.title}</strong>
+                      <span>{item.channel}</span>
+                    </div>
+                    <em>{item.status}</em>
+                  </article>
                 ))}
               </div>
             </section>
@@ -376,11 +456,12 @@ function App() {
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 rows={6}
+                maxLength={280}
               />
 
               <div className="composer-meta">
-                <span>{draft.length}/280</span>
-                <span>No link attached</span>
+                <span className={draftWarning ? 'text-warn' : ''}>{draft.length}/280</span>
+                <span>{draftWarning ? 'Trim this a bit' : 'No link attached'}</span>
               </div>
 
               <div className="checklist">
@@ -412,9 +493,9 @@ function App() {
                 <h2>Action log</h2>
                 <span>Today</span>
               </div>
-              <TimelineItem icon={Send} title="Posted no-link Unfollowr update" detail="Verified visible on @frost_index." />
-              <TimelineItem icon={Ghost} title="Reddit link drops paused" detail="Two links were removed. Trust mode now." />
-              <TimelineItem icon={Heart} title="Human tone enabled" detail="Less pitch deck, more actual person." />
+              {activityLog.slice(0, 5).map((item) => (
+                <TimelineItem icon={item.icon} title={item.title} detail={item.detail} key={`${item.title}-${item.detail}`} />
+              ))}
             </section>
 
             <section className="panel experiments-panel">
@@ -503,6 +584,16 @@ function viewTitle(view: View) {
   }
 
   return titles[view]
+}
+
+function auditLabel(state: AuditState) {
+  if (state === 'running') {
+    return 'Auditing'
+  }
+  if (state === 'complete') {
+    return 'Audit clean'
+  }
+  return 'Run audit'
 }
 
 function useDashboardView() {
